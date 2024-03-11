@@ -1,24 +1,45 @@
-//FINAL BLOCK 1 VERIFICATION
+//FINAL BLOCK 1, 2 VERIFICATION
 // SENSOR CONTROL BLOCK
 #include <Wire.h>
 #include "Adafruit_TCS34725.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <TimeLib.h>
+#include <GxEPD.h>
+#include <GxFont_GFX.h>
+#include <Fonts/FreeMonoBold9pt7b.h>  // Change the font size here
+#include <GxIO/GxIO_SPI/GxIO_SPI.h>
+#include <GxIO/GxIO.h>
+#include <GxDEPG0213BN/GxDEPG0213BN.h>
 
-#define TEMPERATURE_BUS 8 // Digital pin where the DS18B20 is connected
+// Define SPI pin configurations
+#define SPI_MOSI 23
+#define SPI_MISO -1
+#define SPI_CLK 18
+
+// Define E-ink display pin configurations
+#define ELINK_SS 5
+#define ELINK_BUSY 4
+#define ELINK_RESET 16
+#define ELINK_DC 17
+
+#define TEMPERATURE_BUS 19 // Digital pin where the DS18B20 is connected
 #define SDA_PIN 21
 #define SCL_PIN 22
-#define BUTTON_PIN 7
-#define POTENTIOMETER_PIN A0
-#define BUTTON_THRESHOLD 10
+#define BUTTON_PIN 15
+#define BUTTON_THRESHOLD 3
+#define POTENTIOMETER_PIN 13
 
 // Color Sensor Variables
-//Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_614MS, TCS34725_GAIN_1X);
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_614MS, TCS34725_GAIN_1X);
 
 // Thermometer Variables
 OneWire Temperature(TEMPERATURE_BUS);
 DallasTemperature sensors(&Temperature);
+bool ForC;
+
+// Initialize SPI and E-ink display objects
+GxIO_Class io(SPI, /*CS=5*/ ELINK_SS, /*DC=*/ ELINK_DC, /*RST=*/ ELINK_RESET);
+GxEPD_Class display(io, /*RST=*/ ELINK_RESET, /*BUSY=*/ ELINK_BUSY);
 
 // Button and Potentiometer variables
 int lastButtonState = HIGH;    // the previous state from the input pin
@@ -27,15 +48,10 @@ int lastPotValue = 0;          // the previous value from the potentiometer
 int currentPotValue;           // the current reading from the potentiometer
 volatile bool buttonPressed = false;
 
-// Timekeeping variables
-unsigned long previousMillis = 0;
-unsigned long lastElapsedTimeUpdate = 0;
-const long interval = 3000;  // Update every 3 second
+int currentPage = 0;
 
-/*
 //**************************************************************
 // PARAMETER COMPARISON FUNCTIONS
-
 
 // Function to compare RGB values to predefined PH colors
 void compareColorToPH(uint16_t r, uint16_t g, uint16_t b) {
@@ -52,7 +68,7 @@ void compareColorToPH(uint16_t r, uint16_t g, uint16_t b) {
 
 
   // Calculate the Euclidean distance for each pH color
-  float minDistance = FLT_MAX;
+  float minDistance = MAXFLOAT;
   int closestPHIndex = -1;
 
 
@@ -65,7 +81,6 @@ void compareColorToPH(uint16_t r, uint16_t g, uint16_t b) {
       closestPHIndex = i;
     }
   }
-
 
   // Display the closest pH level
   float closestPH = 6.0 + closestPHIndex * 0.5;
@@ -85,7 +100,7 @@ void compareColorToGH(uint16_t r, uint16_t g, uint16_t b) {
   };
 
 
-  float minDistance = FLT_MAX;
+  float minDistance = MAXFLOAT;
   int closestGHIndex = -1;
 
 
@@ -117,7 +132,7 @@ void compareColorToKH(uint16_t r, uint16_t g, uint16_t b) {
   };
 
 
-  float minDistance = FLT_MAX;
+  float minDistance = MAXFLOAT;
   int closestKHIndex = -1;
 
 
@@ -149,7 +164,7 @@ void compareColorToNO2(uint16_t r, uint16_t g, uint16_t b) {
   };
 
 
-  float minDistance = FLT_MAX;
+  float minDistance = MAXFLOAT;
   int closestNO2Index = -1;
 
 
@@ -181,7 +196,7 @@ void compareColorToNO3(uint16_t r, uint16_t g, uint16_t b) {
   };
 
 
-  float minDistance = FLT_MAX;
+  float minDistance = MAXFLOAT;
   int closestNO3Index = -1;
 
 
@@ -201,8 +216,6 @@ void compareColorToNO3(uint16_t r, uint16_t g, uint16_t b) {
   Serial.println(closestNO3);
 }
 
-*/
-
 //**************************************************************
 // TEMPERATURE FUNCTIONS
 void temperatureSensor() {
@@ -211,23 +224,46 @@ void temperatureSensor() {
 
 
   if (temperatureC != DEVICE_DISCONNECTED_C) {
-    // Celsius
-    Serial.print("Temperature: ");
-    Serial.print(temperatureC);
-    Serial.println("°C");
+    if (ForC == 0){
+      // Celsius
+      Serial.print("Temperature: ");
+      Serial.print(temperatureC);
+      Serial.println("�C");
+    }
 
-
-    // Fahrenheit
-    Serial.print("Temperature: ");
-    Serial.print((temperatureC * 9/5) + 32);
-    Serial.println("°F");
+    if (ForC == 1){
+      // Fahrenheit
+      Serial.print("Temperature: ");
+      Serial.print((temperatureC * 9/5) + 32);
+      Serial.println("�F");
+    }
     Serial.println();
-  } else {
+  } 
+  else {
     Serial.println("Error reading temperature!");
   }
 }
 
-/*
+
+void chooseFahrenheitCelsius(){
+  Serial.println("Fahrenheit (F) or Celsius (C): ");
+  while (!Serial.available()) {
+    // Wait for user input
+  }
+  char choice = Serial.read();
+
+  if (choice == 'F'){
+    ForC = 1;
+  }
+  else if (choice == 'C'){
+    ForC = 0;
+  }
+  else{
+    Serial.println("Invalid choice. Please enter F for Fahrenheit or C for Celsius.");
+    chooseFahrenheitCelsius(); // Ask again if the choice is invalid
+  }
+}
+
 //**************************************************************
 // COLOR FUNCTIONS
 void printHexColor(uint16_t r, uint16_t g, uint16_t b) {
@@ -238,10 +274,19 @@ void printHexColor(uint16_t r, uint16_t g, uint16_t b) {
 
 
 void html_rgb(uint16_t r, uint16_t g, uint16_t b, uint16_t c, float (&rgb)[3]) {
-  float factor = 256.0 / c;
-  rgb[0] = pow((r * factor) / 255.0, 2.5) * 255;
-  rgb[1] = pow((g * factor) / 255.0, 2.5) * 255;
-  rgb[2] = pow((b * factor) / 255.0, 2.5) * 255;
+  // Calculate normalization factor
+  float maxRGB = max(max(r, g), b);
+  float factor = 255.0 / maxRGB;
+
+  // Normalize RGB values
+  rgb[0] = r * factor;
+  rgb[1] = g * factor;
+  rgb[2] = b * factor;
+
+  Serial.print("R: "); Serial.print(rgb[0]);
+  Serial.print(", G: "); Serial.print(rgb[1]);
+  Serial.print(", B: "); Serial.print(rgb[2]);
+  Serial.println();
 }
 
 
@@ -258,40 +303,22 @@ void colorSensor() {
   colorTemp = tcs.calculateColorTemperature(r, g, b);
   lux = tcs.calculateLux(r, g, b);
 
-
   Serial.print("R: "); Serial.print(r);
   Serial.print(", G: "); Serial.print(g);
   Serial.print(", B: "); Serial.print(b);
   Serial.println();
 
+  String hexColor = html_hex(r, g, b, c);
+  float rgb[3];
+  html_rgb(r, g, b, c, rgb);
+  Serial.print("HEX Color: 0x"); Serial.println(hexColor);
 
-  // float rgb[3];
-  // html_rgb(r, g, b, c, rgb);
- 
-  // Serial.print("RGB Color: ");
-  // Serial.print("R: "); Serial.print((int)rgb[0]);
-  // Serial.print(", G: "); Serial.print((int)rgb[1]);
-  // Serial.print(", B: "); Serial.print((int)rgb[2]);
-  // Serial.println();
-
-
-  // String hexColor = html_hex(r, g, b, c);
-  // Serial.print("HEX Color: 0x"); Serial.println(hexColor);
-
-
-  Serial.print(", C: "); Serial.print(c);
-  Serial.print(", ColorTemp: "); Serial.print(colorTemp);
-  Serial.print(", Lux: "); Serial.print(lux);
-  Serial.println();
-
-
-  compareColorToPH(r, g, b);  // call the PH function
-  compareColorToGH(r, g, b);  // Call the GH function
-  compareColorToKH(r, g, b);  // Call the KH function
-  compareColorToNO2(r, g, b); // Call the NO2 function
-  compareColorToNO3(r, g, b); // Call the NO3 function
+  compareColorToPH(r, g, b);  // call the PH function with corrected values
+  compareColorToGH(r, g, b);  // Call the GH function with corrected values
+  compareColorToKH(r, g, b);  // Call the KH function with corrected values
+  compareColorToNO2(r, g, b); // Call the NO2 function with corrected values
+  compareColorToNO3(r, g, b); // Call the NO3 function with corrected values
 }
-*/
 
 //**************************************************************
 // INTERRUPT FOR BUTTON PRESS
@@ -300,121 +327,231 @@ void buttonISR() {
 }
 
 //**************************************************************
-// TIME/DATE FUNCTIONS
+// BLOCK 2 VERIFICATION FUNCTION
 
+void block2() {
+  // Continuous loop for color sensor readings and temperature readings until 'X' is entered
+  while (true) {
+    // Display color sensor readings
+    // Continuous temperature readings
+    while (true) {
+      colorSensor();
+      Serial.println("Type X to exit color loop");
 
-void printElapsedTime() {
-  unsigned long currentMillis = millis();
-  Serial.print("Elapsed Time: ");
-  Serial.print((currentMillis - userStartTime) / 1000);  // Convert milliseconds to seconds
-  Serial.println(" seconds");
+      // Check if the user entered 'X' in the serial monitor
+      if (Serial.available() > 0) {
+        char userInput = Serial.read();
+        if (userInput == 'X' || userInput == 'x') {
+          Serial.println("Exiting color loop");
+          break;
+        }
+      }
+      
+      delay(5000); // Adjust delay based on how frequently you want to take temperature readings
+    }
+
+    // Continuous temperature readings
+    while (true) {
+      temperatureSensor();
+      Serial.println("Type X to exit temperature loop");
+
+      // Check if the user entered 'X' in the serial monitor
+      if (Serial.available() > 0) {
+        char userInput = Serial.read();
+        if (userInput == 'X' || userInput == 'x') {
+          Serial.println("Exiting temperature loop");
+          return; // Exit the function
+        }
+      }
+    }
+  }
 }
 
-void setUserDateTime() {
-  Serial.println("Please enter the current time (HH:MM:SS): ");
-  while (!Serial.available()) {
-    // Wait for user input
-  }
-  int hour = Serial.parseInt();
-  while (Serial.read() != ':') {
-    // Wait for the separator
-  }
-  int minute = Serial.parseInt();
-  while (Serial.read() != ':') {
-    // Wait for the separator
-  }
-  int second = Serial.parseInt();
 
-  Serial.println("Please enter the current date (YYYY-MM-DD): ");
-  while (!Serial.available()) {
-    // Wait for user input
-  }
-  int year = Serial.parseInt();
-  while (Serial.read() != '-') {
-    // Wait for the separator
-  }
-  int month = Serial.parseInt();
-  while (Serial.read() != '-') {
-    // Wait for the separator
-  }
-  int day = Serial.parseInt();
+bool leftRightFunc(int currentPotValue){
+  bool leftRight;
+    int threshold = 4095 / 2;
 
-  // Calculate the start time in milliseconds
-  userStartTime = millis() - (second * 1000 + minute * 60 * 1000 + hour * 60 * 60 * 1000 +
-                              day * 24 * 60 * 60 * 1000 + month * 30 * 24 * 60 * 60 * 1000 +
-                              year * 365 * 24 * 60 * 60 * 1000);
-
-  Serial.println("User input time and date set successfully!");
+    if (currentPotValue > threshold) {
+        leftRight = true;  // 1 represents true
+    } else {
+        leftRight = false; // 0 represents false
+    }
+    return leftRight;
 }
 
-void calculateElapsedTime() {
-  unsigned long currentMillis = millis();
-  unsigned long elapsedMillis = currentMillis - userStartTime;
 
-  // Convert milliseconds to seconds, minutes, and hours
-  unsigned long seconds = elapsedMillis / 1000;
-  unsigned long minutes = seconds / 60;
-  unsigned long hours = minutes / 60;
-
-  Serial.print("Elapsed Time: ");
-  Serial.print(hours);
-  Serial.print(" hours, ");
-  Serial.print(minutes % 60);
-  Serial.print(" minutes, ");
-  Serial.print(seconds % 60);
-  Serial.println(" seconds");
+void switchPages(bool leftRight){
+  if (leftRight) {
+    currentPage += 1;
+    if (currentPage >= 4){
+      currentPage = 0;
+    }
+  } else {
+    currentPage -= 1;
+    if (currentPage <= -1){
+      currentPage = 3;
+    }
+  }
+  Serial.println(currentPage);
+  displayPages(currentPage);
 }
+
+
+void displayPages(int currentPage){
+  int xValues[] = {0, 1, 2, 3, 4, 5};
+  int yValues[] = {10, 20, 15, 30, 25, 35};
+  int numPoints = sizeof(xValues) / sizeof(xValues[0]);
+
+  int myIntList[] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+  int listLength = sizeof(myIntList) / sizeof(myIntList[0]);
+  switch (currentPage){
+    case 0:
+      displayText("Page 0: Example Text");
+      break;
+    case 1:
+      displayText("Page 1: Example Nums: \n 1 1 2 ");
+      break;
+    case 2:
+      displayIntList(myIntList, listLength);
+      break;
+    case 3:
+      displayGraph(xValues, yValues, numPoints);
+      break;
+    default:
+      displayText("default");
+      break;
+  }
+  return;
+}
+
+
+void displayText(const char* text) {
+  Serial.println("displaytext");
+  display.fillScreen(GxEPD_WHITE); // Clear the screen
+  display.setTextColor(GxEPD_BLACK);
+  display.setFont(&FreeMonoBold9pt7b);
+  display.setCursor(20, 50);
+  display.print(text);
+  display.update();
+  delay(1000);
+
+}
+
+void displayIntList(int list[], int length) {
+  Serial.println("Displaying Integer List");
+  display.fillScreen(GxEPD_WHITE); // Clear the screen
+  display.setTextColor(GxEPD_BLACK);
+  display.setFont(&FreeMonoBold9pt7b);
+  
+  // Set initial cursor position
+  int x = 20;
+  int y = 50;
+
+  // Display each element of the list
+  for (int i = 0; i < length; i++) {
+    display.setCursor(x, y);
+    display.print(list[i]);
+
+    // Move the cursor to the next position
+    y += 20;  // You can adjust the vertical spacing based on your preference
+
+    // Check if the next position goes beyond the display height
+    if (y > display.height() - 20) {
+      // If it does, reset y and move to the next column
+      y = 50;
+      x += 60;  // You can adjust the horizontal spacing based on your preference
+    }
+  }
+
+  display.update();
+  delay(1000);
+}
+
+void displayGraph(int xValues[], int yValues[], int numPoints) {
+  Serial.println("Displaying Graph");
+  display.fillScreen(GxEPD_WHITE); // Clear the screen
+  display.setTextColor(GxEPD_BLACK);
+  display.setFont(&FreeMonoBold9pt7b);
+
+  // Define graph properties
+  int xStart = 20;  // Starting X-coordinate of the graph
+  int yStart = 20;  // Starting Y-coordinate of the graph
+  int graphWidth = 200;  // Width of the graph
+  int graphHeight = 100; // Height of the graph
+
+  // Calculate the X and Y scale factors
+  float xScale = graphWidth / (float)(numPoints - 1);
+  float yScale = graphHeight / (float)(*std::max_element(yValues, yValues + numPoints) - *std::min_element(yValues, yValues + numPoints));
+
+  // Draw the X and Y axes
+  display.drawLine(xStart, yStart + graphHeight, xStart + graphWidth, yStart + graphHeight, GxEPD_BLACK); // X-axis
+  display.drawLine(xStart, yStart, xStart, yStart + graphHeight, GxEPD_BLACK); // Y-axis
+
+  // Draw the graph points and connecting lines
+  for (int i = 0; i < numPoints - 1; i++) {
+    int x1 = xStart + i * xScale;
+    int y1 = yStart + graphHeight - ((yValues[i] - *std::min_element(yValues, yValues + numPoints)) * yScale);
+    int x2 = xStart + (i + 1) * xScale;
+    int y2 = yStart + graphHeight - ((yValues[i + 1] - *std::min_element(yValues, yValues + numPoints)) * yScale);
+
+    // Draw connecting lines
+    display.drawLine(x1, y1, x2, y2, GxEPD_BLACK);
+
+    // Draw circles at each data point
+    display.fillCircle(x1, y1, 2, GxEPD_BLACK);
+    display.fillCircle(x2, y2, 2, GxEPD_BLACK);
+  }
+
+  display.update();
+  delay(1000);
+}
+
 
 
 //**************************************************************
 // GENERAL FUNCTIONS
+
 void setup() {
-  // tcs.begin();
-  // Wire.begin(SDA_PIN, SCL_PIN);
-  // Wire.setClock(400000);  // set datarate to 400kbits/sec
-  sensors.begin();
+  // set up serial monitor
   Serial.begin(9600);
+  Serial.print("hey girl hey");
+
+  // set up color sensor
+  tcs.begin();
+  Wire.begin(SDA_PIN, SCL_PIN);
+
+  if (tcs.begin()) {
+    Serial.println("Found sensor");
+  } else {
+    Serial.println("No TCS34725 found ... check your connections");
+    while (1);
+  }
+
+  // set up temperature sensor
+  sensors.begin();
+
+  // set up button
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
-  setUserDateTime();
 
-  // if (tcs.begin()) {
-  //   Serial.println("Found sensor");
-  // } else {
-  //   Serial.println("No TCS34725 found ... check your connections");
-  //   while (1);
-  // }
+  // set up screen
+  display.init();
+  display.setRotation(1);
+
+  // decide on units of temperature
+  chooseFahrenheitCelsius();
+
+  // run first round of tests
+  block2();
+
 }
 
 
 void loop() {
-
-//*********************************
-// TEMPERATURE STUFF
-  //temperatureSensor();
-  //delay(5000);
-
-//*********************************
-// TIME STUFF
-  // Check if it's time to update elapsed time
-  unsigned long currentMillis = millis();  
-  if (currentMillis - lastElapsedTimeUpdate >= interval) {
-    calculateElapsedTime();  // Update elapsed time
-    lastElapsedTimeUpdate = currentMillis; // Save the last update time
-  }
-
-//*********************************
-// BUTTON STUFF
-  currentButtonState = digitalRead(BUTTON_PIN);
-  if (lastButtonState == LOW && currentButtonState == HIGH) {
-    Serial.println("Button pressed");
-    // Add code here to handle button press (e.g., switch pages)
-  }
-  lastButtonState = currentButtonState;
-
 //*********************************
 // POTENTIOMETER STUFF
-  // Read the potentiometer value
+  //Read the potentiometer value
   currentPotValue = analogRead(POTENTIOMETER_PIN);
   // Check if the potentiometer value has changed significantly
   if (abs(currentPotValue - lastPotValue) > BUTTON_THRESHOLD) {
@@ -423,9 +560,15 @@ void loop() {
     // Add code here to handle potentiometer value change (e.g., adjust brightness)
   }
   lastPotValue = currentPotValue;
+  bool leftRight = leftRightFunc(currentPotValue);
 
 //*********************************
-// COLOR SENSOR STUFF
-  // colorSensor();
-  // delay(5000);
+// BUTTON STUFF
+  currentButtonState = digitalRead(BUTTON_PIN);
+  if (lastButtonState == LOW && currentButtonState == HIGH) {
+    Serial.println("Button pressed");
+    switchPages(leftRight);
+    // Add code here to handle button press (e.g., switch pages)
+  }
+  lastButtonState = currentButtonState;
 }
